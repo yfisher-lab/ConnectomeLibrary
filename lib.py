@@ -12,14 +12,6 @@ import neuprint
 
 
 
-TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6Imt5bGllaHVjaEBiZXJrZWxleS5lZHUiLCJsZXZlbCI6Im5vYXV0aCIsImltYWdlLXVybCI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0tpVkJGeHFzT1JxRlhnNnNOX0xIWnd4RjRoWDJORWh4WFBpY2hDaEV1Qjdsei0yUT1zOTYtYz9zej01MD9zej01MCIsImV4cCI6MTkyMjI1NDAyMH0.WLushXPCMuxMHltv_LUpoVmhtGyZSTZw08ShIrEboLY"
-
-c = neuprint.Client('neuprint.janelia.org', 'hemibrain:v1.2.1', TOKEN)
-
-
-# for given connectivity matrix, threshold connections to a given connection strength
-# --> by total number of synapses onto neurons of a given type
-# --> by the overall number of synapses onto the given post-synaptic neuron
 
 def skeleton_synapse_visualization(body_Id, type_pre=None, type_post=None, rois_pre=None, rois_post=None, top=None, primary_only=True, skeleton_color=bokeh.palettes.Inferno3[0], pre_palett=None, post_palett=None, loop_colors=True, dim=2, synapse_size=None, batch_size=None):
     """ Function returning a graphic of the skeleton of neuron specified by body_Id with the desired synapses plotted colored by pre/post synpase and neuron subtype
@@ -51,7 +43,7 @@ def skeleton_synapse_visualization(body_Id, type_pre=None, type_post=None, rois_
     neuron_cri = neuprint.NeuronCriteria(bodyId=body_Id)
     p = figure()
     p.y_range.flipped = True
-    s = c.fetch_skeleton(body_Id, format='pandas')
+    s = neuprint.skeleton.fetch_skeleton(body_Id, format='pandas')
     s['bodyId'] = body_Id
     s['color'] = skeleton_color
     s = s.merge(s, 'inner', left_on=['bodyId', 'link'], right_on=['bodyId', 'rowId'], suffixes=['_child', '_parent'])
@@ -114,3 +106,9 @@ def skeleton_synapse_visualization(body_Id, type_pre=None, type_post=None, rois_
     show(p)
 
     return pre_top_conns, post_top_conns
+
+
+
+# for given connectivity matrix, threshold connections to a given connection strength
+# --> by total number of synapses onto neurons of a given type
+# --> by the overall number of synapses onto the given post-synaptic neuron
