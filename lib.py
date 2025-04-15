@@ -168,6 +168,8 @@ def fetch_connectivity(target_scale, conn_scale, conn_type, target_id, conn_id=N
     neurons, conns = neuprint.fetch_adjacencies(pre_nc, post_nc, rois=rois, min_roi_weight=1, include_nonprimary=False)
     conns = neuprint.merge_neuron_properties(neurons, conns, ['type', 'instance'])
     conns.sort_values('weight', ascending=False, inplace=True)
+    # manually remove any 'NotPrimary' synapses (even with include_nonprimary=False some are included!)
+    conns = conns[conns['roi']!='NotPrimary']
     return conns
 
 
@@ -221,8 +223,9 @@ def normalize_connectivity(target_scale, conn_scale, conn_type, target_id, conn_
         for bid in target_ids:
             cell_cnts[bid] = len(conns[conns['bodyId_'+target_type]==bid])
         avg_cnt = sum(cell_cnts.values()) / len(cell_cnts)
-        cell_data = {'bodyId_'+target_type: cell_cnts.keys(), ts_id: [target_id]*len(cell_cnts), cs_id: [conn_id]*len(cell_cnts), conn_scale+'_'+conn_type+'_cell_cnt': cell_cnts.values(), 'norm_'+conn_scale+'_'+conn_type+'_cell_cnt': [x/avg_cnt for x in cell_cnts.values()] }
+        cell_data = {'bodyId_'+target_type: cell_cnts.keys(), ts_id: [target_id]*len(cell_cnts), cs_id: [conn_id]*len(cell_cnts), conn_scale+'_cell_cnt_'+conn_type: cell_cnts.values(), 'norm_'+conn_scale+'_cell_cnt_'+conn_type: [x/avg_cnt for x in cell_cnts.values()] }
         conns = pd.DataFrame(cell_data)
+        conns.sort_values(conn_scale+'_cell_cnt_'+conn_type, ascending=False, inplace=True)
     else:
         tot_conns = fetch_connectivity(target_scale=target_scale, conn_scale='all', conn_type=conn_type, target_id=target_id, conn_id=None, rois=None)
         if norm_mode == 'syn_tot':
@@ -242,6 +245,32 @@ def normalize_connectivity(target_scale, conn_scale, conn_type, target_id, conn_
                 glob_cell_cnts[bid] = len(tot_conns[tot_conns['bodyId_'+target_type]==bid])
                 cell_cnts[bid] = len(conns[conns['bodyId_'+target_type]==bid])
             glob_avg_cell_cnt = sum(glob_cell_cnts.values()) / len(glob_cell_cnts.values())
-            cell_data = { 'bodyId_'+target_type: glob_cell_cnts.keys(), ts_id: [target_id]*len(glob_cell_cnts), 'tot_'+conn_type+'_cell_cnt': glob_cell_cnts.values(), cs_id: [conn_id]*len(glob_cell_cnts), conn_scale+'_'+conn_type+'_cell_cnt': cell_cnts.values(), 'norm_'+conn_scale+'_'+conn_type+'_cell_cnt': [x/glob_avg_cell_cnt for x in cell_cnts.values()] }
+            cell_data = { 'bodyId_'+target_type: glob_cell_cnts.keys(), ts_id: [target_id]*len(glob_cell_cnts), 'tot_cell_cnt_'+conn_type: glob_cell_cnts.values(), cs_id: [conn_id]*len(glob_cell_cnts), conn_scale+'_cell_cnt_'+conn_type: cell_cnts.values(), 'norm_'+conn_scale+'_cell_cnt_'+conn_type: [x/glob_avg_cell_cnt for x in cell_cnts.values()] }
             conns = pd.DataFrame(cell_data)
+            conns.sort_values(conn_scale+'_cell_cnt_'+conn_type, ascending=False, inplace=True)
     return conns
+
+
+def visualize_conn(conn_df, pre_scale, post_scale, sort_by='type', weight_col='weight', height=500, width=700, x_ax_rot=60):
+    """ Function to plot connectivity dataframe as a heatmap
+        * conn_df (pandas DataFrame object): connectivity table to plot
+        * pre_scale (str): scale at which to group presynaptic neurons (plotted along the y-axis)
+            - 'neuron': plot individual neurons labled by integer neuprint bodyId
+            - 'instance': plot neurons grouped by instance labled by neuprint instance string
+            - 'type': plot neurons grouped by type labled by neuprint type string
+        * post_scale (str): scale at which to group postsynaptic neurons (plotted along the x-axis)
+            - 'neuron': plot individual neurons labled by integer neuprint bodyId
+            - 'instance': plot neurons grouped by instance labled by neuprint instance string
+            - 'type': plot neurons grouped by type labled by neuprint type string
+        * sort_by (str): desired ordering of neurons, options: ['instance', 'type'] 
+        * weight_col (str): label of the column containing the weights to be plotted
+        * height (int): desired hight of the plot
+        * width (int): desired width of the plot
+        * x_ax_rot (int): desired degree rotation of the x-axis lables
+    """
+    # TODO: figure out how to plot neuron groupings at different scales allong x and y axies
+    conn_mx = neuprint.connection_table_to_matrix(conn_df, group_cols=(pre_scale, post_scale), weight_col=weight_col, sort_by=sort_by)
+    conn_mx.index = conn_mx.index.astype(str)
+    conn_mx.columns = conn_mx.columns.astype(str)
+    return conn_mx.hvplot.heatmap(height=height, width=width, xaxis='top').opts(xrotation=x_ax_rot)
+
