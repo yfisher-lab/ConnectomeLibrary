@@ -268,8 +268,9 @@ def visualize_conn(conn_df, pre_scale, post_scale, sort_by='type', weight_col='w
         * width (int): desired width of the plot
         * x_ax_rot (int): desired degree rotation of the x-axis lables
     """
-    # TODO: figure out how to plot neuron groupings at different scales allong x and y axies
-    conn_mx = neuprint.connection_table_to_matrix(conn_df, group_cols=(pre_scale, post_scale), weight_col=weight_col, sort_by=sort_by)
+    if pre_scale=='neuron': pre_scale = 'bodyId'
+    if post_scale=='neuron': post_scale = 'bodyId'
+    conn_mx = neuprint.connection_table_to_matrix(conn_df, group_cols=(pre_scale+'_pre', post_scale+'_post'), weight_col=weight_col, sort_by=sort_by)
     conn_mx.index = conn_mx.index.astype(str)
     conn_mx.columns = conn_mx.columns.astype(str)
     return conn_mx.hvplot.heatmap(height=height, width=width, xaxis='top').opts(xrotation=x_ax_rot)
