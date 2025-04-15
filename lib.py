@@ -108,7 +108,140 @@ def skeleton_synapse_visualization(body_Id, type_pre=None, type_post=None, rois_
     return pre_top_conns, post_top_conns
 
 
+def fetch_connectivity(target_scale, conn_scale, conn_type, target_id, conn_id=None, rois=None):
+    """ Fetch a connectivity matrix between specified neurons/subtypes/types avoiding over/under counting of synapses 
+        * target_scale (str): indicates scale to analyze neuron(s) of interest on
+            - 'neuron': normalize conections to/from a specific neuron 
+                - NOTE: must specify neuprint neuron integer bodyId as 'target_id' argument
+            - 'instance': normalize connections over an entire instance (subtype) of neurons (ie 'PEN_b(PB06b)_L4')
+                - NOTE: must specify neuprint neuron instance (subtype) name as 'target_id' argument 
+            - 'type': normalize connections over an entire type of neurons (ie 'PEN_b(PEN2)')
+                - NOTE: must specify neuprint neuron type name as 'target_id' argument 
+        * conn_scale (str): indicates scale over which to analyze connections to/from target neuron(s)
+            - 'neuron': normalize connections to/from a sprcific neuron
+                - NOTE: must specify neuprint neuron integer bodyId as 'conn_id' argument
+            - 'instance': nomalize connections to/from an entire instance (subtype) of neurons (ie 'PEN_b(PB06b)_L4')
+                - NOTE: must specify neuprint neuron instance (subtype) name as 'conn_id' argument
+            - 'type': normalize connections to/from an entire type of neurons (ie 'PEN_b(PEN2)')
+                - NOTE: must specify neuprint neuron type name as 'conn_id' argument
+            - 'all': normalize connections to/from all pre/post synaptic neurons
+        * conn_type (str): indicates weather to analyzing inputs or outputs to/from a given neuron/instance/type
+            - 'pre': normalize presynaptic connections (analyze relative contributions of inputs) 
+            - 'post': normalize postsynaptic connections (analyze relative output strengths)
+        * target_id (int or str): neuprint identifier for target neuron(s) ID/instance/type
+            - NOTE: nust exactly match neuron's identifier in the neuprint database including capatilization
+        * conn_id (int, str, or None): neuprint identifier for connecting neuron(s) ID/instance/type
+            - Leave as 'None' if you're interested in all connections to/from the target neuron(s)
+            - NOTE: nust exactly match neuron's identifier in the neuprint database including capatilization
+        * rois (list of str): list of string identifiers for all ROIs from which to analyze connections from
+            - Leave as None if interested in all connections bettween the specified neurons, regardless of location 
+    """
+    assert target_scale in ['neuron', 'instance', 'type'], "Error: must specify target scale of 'neuron', 'instance', or 'type'"
+    assert conn_scale in ['neuron', 'instance', 'type', 'all'], "Error: must specify connection scale of 'neuron', 'instance', 'type', or 'all'"
+    assert conn_type in ['pre', 'post'], "Error: must specify connection type of 'pre' or 'post'"
+    if target_scale == 'neuron':
+        assert type(target_id) == int, "Error: must specify integer bodyId for target neuron"
+        target_nc = neuprint.NeuronCriteria(bodyId=target_id)
+    elif target_scale == 'instance':
+        assert type(target_id) == str, "Error: must specify string neuprint instance name for target neuron subtype"
+        target_nc = neuprint.NeuronCriteria(instance=target_id)
+    else:
+        assert type(target_id) == str, "Error: must specify string neuprint type name for connecting neuron type"
+        target_nc = neuprint.NeuronCriteria(type=target_id)
+    if conn_scale == 'neuron':
+        assert type(conn_id) == int, "Error: must specify integer bodyId for connecting neuron"
+        conn_nc = neuprint.NeuronCriteria(bodyId=conn_id)
+    elif conn_scale == 'instance':
+        assert type(conn_id) == str, "Error: must specify string neuprint instance name for connecting neuron subtype"
+        conn_nc = neuprint.NeuronCriteria(instance=conn_id)
+    elif conn_scale == 'type':
+        assert type(conn_id) == str, "Error: must specify string neuprint type name for connecting neuron type"
+        conn_nc = neuprint.NeuronCriteria(type=conn_id)
+    else:
+        conn_nc=None
+    if conn_type == 'pre':
+        pre_nc = conn_nc
+        post_nc = target_nc
+    else:
+        pre_nc = target_nc
+        post_nc = conn_nc
+    neurons, conns = neuprint.fetch_adjacencies(pre_nc, post_nc, rois=rois, min_roi_weight=1, include_nonprimary=False)
+    conns = neuprint.merge_neuron_properties(neurons, conns, ['type', 'instance'])
+    conns.sort_values('weight', ascending=False, inplace=True)
+    return conns
 
-# for given connectivity matrix, threshold connections to a given connection strength
-# --> by total number of synapses onto neurons of a given type
-# --> by the overall number of synapses onto the given post-synaptic neuron
+
+def normalize_connectivity(target_scale, conn_scale, conn_type, target_id, conn_id=None, rois=None, norm_mode='syn_cnt'):
+    """ Normalize a connectivity matrix between specified neurons/subtypes/types 
+        * target_scale (str): indicates scale to analyze neuron(s) of interest on
+            - 'neuron': normalize conections to/from a specific neuron 
+                - NOTE: must specify neuprint neuron integer bodyId as 'target_id' argument
+            - 'instance': normalize connections over an entire instance (subtype) of neurons (ie 'PEN_b(PB06b)_L4')
+                - NOTE: must specify neuprint neuron instance (subtype) name as 'target_id' argument 
+            - 'type': normalize connections over an entire type of neurons (ie 'PEN_b(PEN2)')
+                - NOTE: must specify neuprint neuron type name as 'target_id' argument 
+        * conn_scale (str): indicates scale over which to analyze connections to/from target neuron(s)
+            - 'instance': nomalize connections to/from an entire instance (subtype) of neurons (ie 'PEN_b(PB06b)_L4')
+                - NOTE: must specify neuprint neuron instance (subtype) name as 'conn_id' argument
+            - 'type': normalize connections to/from an entire type of neurons (ie 'PEN_b(PEN2)')
+                - NOTE: must specify neuprint neuron type name as 'conn_id' argument
+            - 'all': normalize connections to/from all pre/post synaptic neurons
+        * conn_type (str): indicates weather to analyzing inputs or outputs to/from a given neuron/instance/type
+            - 'pre': normalize presynaptic connections (analyze relative contributions of inputs) 
+            - 'post': normalize postsynaptic connections (analyze relative output strengths)
+        * target_id (int or str): neuprint identifier for target neuron(s) ID/instance/type
+            - NOTE: nust exactly match neuron's identifier in the neuprint database including capatilization
+        * conn_id (int, str, or None): neuprint identifier for connecting neuron(s) ID/instance/type
+            - Leave as 'None' if you're interested in all connections to/from the target neuron(s)
+            - NOTE: nust exactly match neuron's identifier in the neuprint database including capatilization
+        * rois (list of str): list of string identifiers for all ROIs from which to analyze connections from
+            - Leave as None if interested in all connections bettween the specified neurons, regardless of location 
+        * norm_mode (str): indicates the method of normalization to be preformed
+            - 'syn_cnt': normalize connection strength between target neuron/instance/type and connection neuron/instance/type by average number of connections between target neuron/instance/type and connection neuron/instance/type (ignoring cell counts)
+            - 'syn_tot' : normalize connection strength between target neuron/instance/type and connection neuron/instance/type by average total number of synapses to/from target neuron/instance/type (ignoring cell counts) 
+            - 'cell_cnt': normalize connection strength between target neuron/instance/type and connection neuron/instance/type by average number of target neuron/instance/type neurons connecting to (pre/post) connection neuron/instance/type neurons (ignoring synapse counts)
+            - 'cell_tot': normalize connection strength between target neuron/instance/type and connection neuron/instance/type by total number of neurons connecting to target neuron/instance/type neurons (ignoring synapse counts)
+    """
+    assert norm_mode in ['syn_cnt', 'syn_tot', 'cell_cnt', 'cell_tot'], "Error: must specify norm mode of 'syn_cnt', 'syn_tot', 'cell_cnt', or 'cell_tot'"
+    if conn_scale == 'neuron':
+        print("Cannot normalize connections on the scale of individual neurons. Nothing to do.")
+        return None
+    target_type = ('pre' if conn_type=='post' else 'post')
+    ts_id = target_scale + '_' + target_type
+    cs_id = conn_scale + '_' + conn_type
+    conns = fetch_connectivity(target_scale, conn_scale, conn_type, target_id, conn_id, rois)
+    if norm_mode == 'syn_cnt':
+        avg_syn_cnt = sum(conns['weight']) / len(conns['weight'])
+        conns['norm_syn_cnt'] = conns['weight'] / avg_syn_cnt
+        conns['syn_cnt'] = conns['weight']
+        conns = conns[['bodyId_pre', 'instance_pre', 'type_pre', 'bodyId_post', 'instance_post', 'type_post', 'roi', 'syn_cnt', 'norm_syn_cnt']]
+    elif norm_mode == 'cell_cnt':
+        cell_cnts = {}
+        target_ids = conns['bodyId_'+target_type].unique()
+        for bid in target_ids:
+            cell_cnts[bid] = len(conns[conns['bodyId_'+target_type]==bid])
+        avg_cnt = sum(cell_cnts.values()) / len(cell_cnts)
+        cell_data = {'bodyId_'+target_type: cell_cnts.keys(), ts_id: [target_id]*len(cell_cnts), cs_id: [conn_id]*len(cell_cnts), conn_scale+'_'+conn_type+'_cell_cnt': cell_cnts.values(), 'norm_'+conn_scale+'_'+conn_type+'_cell_cnt': [x/avg_cnt for x in cell_cnts.values()] }
+        conns = pd.DataFrame(cell_data)
+    else:
+        tot_conns = fetch_connectivity(target_scale=target_scale, conn_scale='all', conn_type=conn_type, target_id=target_id, conn_id=None, rois=None)
+        if norm_mode == 'syn_tot':
+            # calculate average pre/post synapse number over all neurons of target instance/type 
+            avg_tot_syn_cnt = sum(tot_conns['weight']) / len(tot_conns['weight'])
+            # normalize synapse count in conn table 
+            conns['global_norm_syn_cnt'] = conns['weight'] / avg_tot_syn_cnt
+            conns['syn_cnt'] = conns['weight']
+            conns = conns[['bodyId_pre', 'instance_pre', 'type_pre', 'bodyId_post', 'instance_post', 'type_post', 'roi', 'syn_cnt', 'global_norm_syn_cnt']]
+        else:
+            # calaculate avarage pre/post synaptic cell count over all target instance/type
+            # calc norm connection strength 
+            target_ids = tot_conns['bodyId_'+target_type].unique()
+            glob_cell_cnts = {}
+            cell_cnts = {}
+            for bid in target_ids:
+                glob_cell_cnts[bid] = len(tot_conns[tot_conns['bodyId_'+target_type]==bid])
+                cell_cnts[bid] = len(conns[conns['bodyId_'+target_type]==bid])
+            glob_avg_cell_cnt = sum(glob_cell_cnts.values()) / len(glob_cell_cnts.values())
+            cell_data = { 'bodyId_'+target_type: glob_cell_cnts.keys(), ts_id: [target_id]*len(glob_cell_cnts), 'tot_'+conn_type+'_cell_cnt': glob_cell_cnts.values(), cs_id: [conn_id]*len(glob_cell_cnts), conn_scale+'_'+conn_type+'_cell_cnt': cell_cnts.values(), 'norm_'+conn_scale+'_'+conn_type+'_cell_cnt': [x/glob_avg_cell_cnt for x in cell_cnts.values()] }
+            conns = pd.DataFrame(cell_data)
+    return conns
