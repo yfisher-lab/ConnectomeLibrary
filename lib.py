@@ -12,11 +12,136 @@ import neuprint
 
 
 
+
+class syn_specs:
+    def __init__(self, target_neuron: int, scale: str, conn_type: str, conn_id: str | int | None = None, rois=None, lable_res: str | None = None, top: int | None = None, primary_only: bool = True):
+        """ Class for handeling synapses between a specified target neuron and a connecting neuron/instance/type 
+            * target_neuron (int): neuprint bodyId of the neuron would you like to examine
+            * scale (str): scale at which to examine synapses to/from the target neuron
+                - 'neuron': anylize synapses between the target neuron and the given neuron
+                - 'instance': anylize synapses between the target neuron and the given neuron instance (subtype)
+                    * NOTE: must specify neuprint neuron instance (subtype) name as 'conn_id' argument
+                - 'type': anylize synapses between the target neuron and given neuron type
+                    * NOTE: must specify neuprint neuron type name as 'conn_id' argument
+                - 'all': anylize synapses between the target neuron and all connecting neurons
+            * conn_type (str) ['pre', 'post']: specify weather you are interested in pre or post synaptic connections between the target neuron and connecting neuron class
+                - This is from the point of view of the target neuron
+            * conn_id (str): neuprint identifier for connecting neuron body Id/instance/type
+                - Leave as None if interested in all pre/post synapses
+            * rois (list of str): return only synapses within the given ROIs, leave as None if interested in all synapses
+            * lable_res (str): resolution at which to label synapses (options: 'neuron', 'instance', 'type')
+            * top (int): number of neurons to visualize connections from/to
+                - If left as None will return synapses from/to all neurons matching the query, otherwise returns synapses from/to specified number of neurons sorted by highest number of synapses
+            * primary_only (bool): return only primary synapses of the given type
+        """
+        assert scale in ['neuron', 'instance', 'type', 'all'], "Error: must specify scale of 'neuron', 'instance', 'type', or 'all'"
+        if lable_res: assert lable_res in ['neuron', 'instance', 'type'], "Error: must specify lable resolution of 'neuron', 'instance', or 'type'"
+        assert conn_type in ['pre', 'post'], "Error: must specify connection type of either pre or post"
+
+        self.target_neuron = target_neuron
+        self.scale = scale
+        self.conn_id = conn_id
+        self.conn_type = conn_type
+        self.rois = rois
+        self.top = top
+        self.primary_only = primary_only
+
+        if lable_res=='neuron':
+            self.lable_res = 'bodyId'
+        else:
+            self.lable_res = lable_res
+        
+        if scale=='neuron':
+            conn_cri = neuprint.NeuronCriteria(bodyId=conn_id)
+            self.lable_res = 'bodyId'
+        elif scale=='instance':
+            conn_cri = neuprint.NeuronCriteria(instance=conn_id)
+            if lable_res==None or lable_res=='type': self.lable_res = 'bodyId'
+        elif scale=='type':
+            conn_cri = neuprint.NeuronCriteria(type=conn_id)
+            if lable_res==None: self.lable_res = 'instance'
+        else:
+            conn_cri = None
+            if lable_res==None: self.lable_res = 'type'
+        
+        neuron_cri = neuprint.NeuronCriteria(bodyId=target_neuron)
+        self.syn_cri = neuprint.SynapseCriteria(rois=rois, primary_only=primary_only)
+        if conn_type == 'pre':
+            self.pre_cri = conn_cri
+            self.post_cri = neuron_cri
+        else:
+            self.pre_cri = neuron_cri
+            self.post_cri = conn_cri
+    
+    def create_points(self, palett=None, loop_colors=True):
+        print(f"Fetching {self.conn_type}-synaptic connections...")
+        conn_df = neuprint.fetch_synapse_connections(self.pre_cri, self.post_cri, self.syn_cri)
+        neurons, _ = neuprint.fetch_neurons(conn_df['bodyId_'+self.conn_type].unique())
+        conn_df = neuprint.utils.merge_neuron_properties(neurons, conn_df)
+        if self.top: 
+            top_conns = conn_df[self.lable_res+'_'+self.conn_type].value_counts().head(self.top)
+        else:
+            top_conns = conn_df[self.lable_res+'_'+self.conn_type].value_counts()
+        df_pal = bokeh.palettes.Plasma if self.conn_type=='pre' else bokeh.palettes.Viridis
+        if not palett:
+            lc = len(top_conns)
+            if lc <= 9:
+                palett = bokeh.palettes.RdPu[lc if lc>2 else 3] if self.conn_type=='pre' else bokeh.palettes.YlGn[lc if lc>2 else 3]
+            if lc <= 11:
+                palett = df_pal[lc if lc>2 else 3]
+            elif lc > 100:
+                palett = df_pal[256]
+            else:
+                if loop_colors:
+                    palett = df_pal[11]
+                else:
+                    palett = bokeh.palettes.Iridescent23 if self.conn_type=='pre' else bokeh.palettes.TolRainbow23
+        points = conn_df.query(f'{self.lable_res}_{self.conn_type} in @top_conns.index').copy()
+        colors = (palett * (len(points) // len(palett) + 1))[:len(points)]
+        points['color'] = points[self.lable_res+'_'+self.conn_type].map(dict(zip(top_conns.index, colors)))
+        self.top_conns = top_conns
+        self.points = points
+        return self.top_conns, self.points
+
+
+def skeleton_synapse_visualization(target_neuron: int, syn_classes, skeleton_color=bokeh.palettes.Inferno3[0], paletts=None, loop_colors:bool = True):
+    """ Function returning a graphic of the skeleton of neuron specified by body_Id with the desired synapses plotted colored by pre/post synpase and neuron subtype
+        * target_neuron (int): neuprint integer bodyId of the neuron would you like to examine
+        * syn_classes (list of syn_spec objects): list of all classes of synapses you want to visualize
+        * skeleton_color (bokeh palett): desired color descriptor for skeleton (default: black)
+        * paletts (list of bokeh paletts): bokeh palett to use for each synapse class
+            - NOTE: if provided, the number of paletts must match the number of synapse classes specified
+        * loop_colors (bool): flag for weather or not to repeat colors over multiple neurons 
+            - TIP: if you are plotting connections from less than ~100 neurons you should leave this as 'True' or the difference bewteen synapses of different neurons will be very hard to visually distingish 
+            - NOTE: The maximum number of colors avaiable in the palettes is 256 so if you are plotting connections to more neurons than the colors will be repeated regardless of how you set this flag
+    """
+    if paletts: assert len(paletts) == len(syn_classes), "Error: must specify a palett for each synapse class"
+    p = figure()
+    p.y_range.flipped = True
+    s = neuprint.skeleton.fetch_skeleton(target_neuron, format='pandas')
+    s['bodyId'] = target_neuron
+    s['color'] = skeleton_color
+    s = s.merge(s, 'inner', left_on=['bodyId', 'link'], right_on=['bodyId', 'rowId'], suffixes=['_child', '_parent'])
+    p.segment(x0='x_child', x1='x_parent', y0='z_child', y1='z_parent', color='color_child', source=s)
+    top_conns = []
+    for i, ss in enumerate(syn_classes):
+        assert ss.target_neuron == target_neuron, "Error, all synapse classes must reference same target neuron"
+        pal = paletts[i] if paletts else None
+        top_conn, points = ss.create_points(palett=pal, loop_colors=loop_colors)
+        top_conns.append(top_conn)
+        p.scatter(points['x_pre'], points['z_pre'], color=points['color'])
+    show(p)
+    return top_conns
+
+
 def gen_syn_scatter(body_Id, scale, conn_id, conn_type, rois=None, lable_res=None, top=None, primary_only=True, palett=None, loop_colors=True):
-    assert scale in ['instance', 'type', 'all'], "Error: must specify scale of 'instance', 'type', or 'all'"
+    assert scale in ['neuron', 'instance', 'type', 'all'], "Error: must specify scale of 'neuron', 'instance', 'type', or 'all'"
     assert conn_type in ['pre', 'post'], "Error: must specify connection type of either pre or post"
     neuron_cri = neuprint.NeuronCriteria(bodyId=body_Id)
-    if scale=='instance':
+    if scale=='neuron':
+        conn_cri = neuprint.NeuronCriteria(bodyId=conn_id)
+        if lable_res==None: lable_res = 'bodyId'
+    elif scale=='instance':
         conn_cri = neuprint.NeuronCriteria(instance=conn_id)
         if lable_res==None: lable_res = 'bodyId'
     elif scale=='type':
@@ -106,9 +231,8 @@ def skeleton_synapse_visualization_flex(body_Id, pre_scale=None, post_scale=None
     # TODO: add dim variable 
     # TODO: add batch_size support
     assert pre_scale or post_scale, "Error: must specify either pre or post synaptic neuron scale"
-    if pre_scale: assert pre_scale in ['instance', 'type', 'all'], "Error: must specify presynaptic scale of 'instance', 'type', or 'all'"
-    if post_scale: assert post_scale in ['instance', 'type', 'all'], "Error: must specify postsynaptic scale of 'instance', 'type', or 'all'"
-    neuron_cri = neuprint.NeuronCriteria(bodyId=body_Id)
+    if pre_scale: assert pre_scale in ['neuron', 'instance', 'type', 'all'], "Error: must specify presynaptic scale of 'neuron', 'instance', 'type', or 'all'"
+    if post_scale: assert post_scale in ['neuron', 'instance', 'type', 'all'], "Error: must specify postsynaptic scale of 'neuron', 'instance', 'type', or 'all'"
     p = figure()
     p.y_range.flipped = True
     s = neuprint.skeleton.fetch_skeleton(body_Id, format='pandas')
