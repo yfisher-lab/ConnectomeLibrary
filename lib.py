@@ -11,6 +11,7 @@ from bokeh.plotting import figure, show, output_notebook
 import neuprint
 
 
+# NOTE: one distance unit in the connectome is 8nm, need to multiply by 8/1000 to get microns
 
 
 class syn_specs:
@@ -152,7 +153,7 @@ def fetch_connectivity(target_scale, conn_scale, conn_type, target_id, conn_id=N
             - 'type': normalize connections to/from an entire type of neurons (ie 'PEN_b(PEN2)')
                 - NOTE: must specify neuprint neuron type name as 'conn_id' argument
             - 'all': normalize connections to/from all pre/post synaptic neurons
-        * conn_type (str): indicates weather to analyzing inputs or outputs to/from a given neuron/instance/type
+        * conn_type (str): indicates weather to analyze inputs or outputs to/from a given neuron/instance/type
             - 'pre': normalize presynaptic connections (analyze relative contributions of inputs) 
             - 'post': normalize postsynaptic connections (analyze relative output strengths)
         * target_id (int or str): neuprint identifier for target neuron(s) ID/instance/type
@@ -198,6 +199,45 @@ def fetch_connectivity(target_scale, conn_scale, conn_type, target_id, conn_id=N
     # manually remove any 'NotPrimary' synapses (even with include_nonprimary=False some are included!)
     conns = conns[conns['roi']!='NotPrimary']
     conns = conns[['bodyId_pre', 'instance_pre', 'type_pre', 'bodyId_post', 'instance_post', 'type_post', 'roi', 'weight']]
+    return conns
+
+
+def fetch_connectivity_multi(target_scale, target_id, conn_type, conn_specs, rois=None):
+    """ Fetch a connectivity matrix between a given target neuron and multiple classes of pre/post synaptic neurons/subtypes/types avoiding over/under counting of synapses
+        * NOTE: all connections must be either pre or post syanptic with respect to the specified target neuron (no mixing)
+        * target_scale (str): indicates scale to analyze neuron(s) of interest on
+            - 'neuron': normalize conections to/from a specific neuron 
+                - NOTE: must specify neuprint neuron integer bodyId as 'target_id' argument
+            - 'instance': normalize connections over an entire instance (subtype) of neurons (ie 'PEN_b(PB06b)_L4')
+                - NOTE: must specify neuprint neuron instance (subtype) name as 'target_id' argument 
+            - 'type': normalize connections over an entire type of neurons (ie 'PEN_b(PEN2)')
+                - NOTE: must specify neuprint neuron type name as 'target_id' argument 
+         * target_id (int or str): neuprint identifier for target neuron(s) ID/instance/type
+            - NOTE: nust exactly match neuron's identifier in the neuprint database including capatilization
+         * conn_type (str): indicates weather to analyzing inputs or outputs to/from a given neuron/instance/type
+            - 'pre': normalize presynaptic connections (analyze relative contributions of inputs) 
+            - 'post': normalize postsynaptic connections (analyze relative output strengths)
+        * conn_specs: list of (conn_scale, conn_id) tuples for each connecting neuron class
+            * conn_scale (str): indicates scale over which to analyze connections to/from target neuron(s)
+                - 'neuron': normalize connections to/from a sprcific neuron
+                    - NOTE: must specify neuprint neuron integer bodyId as 'conn_id' argument
+                - 'instance': nomalize connections to/from an entire instance (subtype) of neurons (ie 'PEN_b(PB06b)_L4')
+                    - NOTE: must specify neuprint neuron instance (subtype) name as 'conn_id' argument
+                - 'type': normalize connections to/from an entire type of neurons (ie 'PEN_b(PEN2)')
+                    - NOTE: must specify neuprint neuron type name as 'conn_id' argument
+                - 'all': normalize connections to/from all pre/post synaptic neurons
+            * conn_id (int, str, or None): neuprint identifier for connecting neuron(s) ID/instance/type
+                - Leave as 'None' if you're interested in all connections to/from the target neuron(s)
+                - NOTE: nust exactly match neuron's identifier in the neuprint database including capatilization
+        * rois (list of str): list of string identifiers for all ROIs from which to analyze connections from
+            - Leave as None if interested in all connections bettween the specified neurons, regardless of location 
+    """
+    conns = []
+    for conn_class in conn_specs:
+        c = fetch_connectivity(target_scale=target_scale, conn_scale=conn_class[0], conn_type=conn_type, target_id=target_id, conn_id=conn_class[1], rois=rois)
+        conns.append(c)
+    conns = pd.concat(conns)
+    conns.sort_values('weight', ascending=False, inplace=True)
     return conns
 
 
