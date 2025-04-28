@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import statistics as stats
 
 import bokeh
 import hvplot.pandas
@@ -239,6 +240,44 @@ def fetch_connectivity_multi(target_scale, target_id, conn_type, conn_specs, roi
     conns = pd.concat(conns)
     conns.sort_values('weight', ascending=False, inplace=True)
     return conns
+
+
+def get_synapse_cnt_stats(target_scale, conn_scale, conn_type, target_id, conn_id=None, rois=None, v=False):
+    """ Get average number of synapses between individual neurons of a target neuron class and specified connecting neuron class
+        * target_scale (str): indicates scale to analyze neuron(s) of interest on
+            - 'neuron': normalize conections to/from a specific neuron 
+                - NOTE: must specify neuprint neuron integer bodyId as 'target_id' argument
+            - 'instance': normalize connections over an entire instance (subtype) of neurons (ie 'PEN_b(PB06b)_L4')
+                - NOTE: must specify neuprint neuron instance (subtype) name as 'target_id' argument 
+            - 'type': normalize connections over an entire type of neurons (ie 'PEN_b(PEN2)')
+                - NOTE: must specify neuprint neuron type name as 'target_id' argument 
+        * conn_scale (str): indicates scale over which to analyze connections to/from target neuron(s)
+            - 'instance': nomalize connections to/from an entire instance (subtype) of neurons (ie 'PEN_b(PB06b)_L4')
+                - NOTE: must specify neuprint neuron instance (subtype) name as 'conn_id' argument
+            - 'type': normalize connections to/from an entire type of neurons (ie 'PEN_b(PEN2)')
+                - NOTE: must specify neuprint neuron type name as 'conn_id' argument
+            - 'all': normalize connections to/from all pre/post synaptic neurons
+        * conn_type (str): indicates weather to analyzing inputs or outputs to/from a given neuron/instance/type
+            - 'pre': normalize presynaptic connections (analyze relative contributions of inputs) 
+            - 'post': normalize postsynaptic connections (analyze relative output strengths)
+        * target_id (int or str): neuprint identifier for target neuron(s) ID/instance/type
+            - NOTE: nust exactly match neuron's identifier in the neuprint database including capatilization
+        * conn_id (int, str, or None): neuprint identifier for connecting neuron(s) ID/instance/type
+            - Leave as 'None' if you're interested in all connections to/from the target neuron(s)
+            - NOTE: nust exactly match neuron's identifier in the neuprint database including capatilization
+        * rois (list of str): list of string identifiers for all ROIs from which to analyze connections from
+            - Leave as None if interested in all connections bettween the specified neurons, regardless of location
+        * v (bool): flag indicating weather or not to print connection statistics (default: False)
+    """
+    conns = fetch_connectivity(target_scale, conn_scale, conn_type, target_id, conn_id=conn_id, rois=rois)
+    num_conns = len(conns['weight'])
+    tot_syn = sum(conns['weight'])
+    mean = (tot_syn / num_conns) if num_conns>0 else 0
+    sd = stats.stdev(conns['weight']) if num_conns>1 else 0
+    if v:
+        print(f"Synapse count statistics for {target_id if conn_type=='post' else conn_id} => {target_id if conn_type=='pre' else conn_id} connections:")
+        print(f" * Number connections:\t{num_conns}\n * Total synapse count:\t{tot_syn}\n * Mean synapse count:\t{mean:.02f}\n * Standard deviation:\t{sd:.02f}")
+    return tot_syn, mean, sd, num_conns
 
 
 def normalize_connectivity(target_scale, conn_scale, conn_type, target_id, conn_id=None, rois=None, norm_mode='syn_cnt'):
