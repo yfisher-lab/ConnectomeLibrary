@@ -34,7 +34,7 @@ class syn_specs:
             * lable_res (str): resolution at which to label synapses (options: 'neuron', 'instance', 'type')
             * top (int): number of neurons to visualize connections from/to
                 - If left as None will return synapses from/to all neurons matching the query, otherwise returns synapses from/to specified number of neurons sorted by highest number of synapses
-            * primary_only (bool): return only primary synapses of the given type
+            * primary_only (bool): return only primary synapses of the given type (do NOT include synapses from non-primary ROIs)
         """
         assert scale in ['neuron', 'instance', 'type', 'all'], "Error: must specify scale of 'neuron', 'instance', 'type', or 'all'"
         if lable_res: assert lable_res in ['neuron', 'instance', 'type'], "Error: must specify lable resolution of 'neuron', 'instance', or 'type'"
@@ -75,11 +75,23 @@ class syn_specs:
             self.pre_cri = neuron_cri
             self.post_cri = conn_cri
     
-    def create_points(self, palett=None, loop_colors=True):
+    def fetch_syn_conns(self):
         print(f"Fetching {self.conn_type}-synaptic connections...")
-        conn_df = neuprint.fetch_synapse_connections(self.pre_cri, self.post_cri, self.syn_cri)
-        neurons, _ = neuprint.fetch_neurons(conn_df['bodyId_'+self.conn_type].unique())
-        conn_df = neuprint.utils.merge_neuron_properties(neurons, conn_df)
+        try:
+            conn_df = neuprint.fetch_synapse_connections(self.pre_cri, self.post_cri, self.syn_cri)
+            neurons, _ = neuprint.fetch_neurons(conn_df['bodyId_'+self.conn_type].unique())
+            conn_df = neuprint.utils.merge_neuron_properties(neurons, conn_df)
+            self.conns = conn_df
+        except RuntimeError:
+            print("No synapses match your source criteria")
+            self.conns = None
+        return self.conns
+    
+    def create_points(self, palett=None, loop_colors=True):
+        conn_df = self.fetch_syn_conns()
+        if conn_df == None:
+            print("No synapses match specifications, can't create points")
+            exit(0)
         if self.top: 
             top_conns = conn_df[self.lable_res+'_'+self.conn_type].value_counts().head(self.top)
         else:
