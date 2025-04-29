@@ -81,7 +81,7 @@ class syn_specs:
             conn_df = neuprint.fetch_synapse_connections(self.pre_cri, self.post_cri, self.syn_cri)
             neurons, _ = neuprint.fetch_neurons(conn_df['bodyId_'+self.conn_type].unique())
             conn_df = neuprint.utils.merge_neuron_properties(neurons, conn_df)
-            self.conns = conn_df
+            self.conns = conn_df.sort_values(f"type_{self.conn_type}")
         except RuntimeError:
             print("No synapses match your source criteria")
             self.conns = None
@@ -89,7 +89,7 @@ class syn_specs:
     
     def create_points(self, palett=None, loop_colors=True):
         conn_df = self.fetch_syn_conns()
-        if conn_df == None:
+        if type(conn_df) != pd.core.frame.DataFrame:
             print("No synapses match specifications, can't create points")
             exit(0)
         if self.top: 
