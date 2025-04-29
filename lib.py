@@ -129,7 +129,8 @@ def skeleton_synapse_visualization(target_neuron: int, syn_classes, skeleton_col
             - TIP: if you are plotting connections from less than ~100 neurons you should leave this as 'True' or the difference bewteen synapses of different neurons will be very hard to visually distingish 
             - NOTE: The maximum number of colors avaiable in the palettes is 256 so if you are plotting connections to more neurons than the colors will be repeated regardless of how you set this flag
     """
-    # TODO: figure out how to generate color-coded lable_res key
+    # TODO: figure out how to generate color-coded lable_res legend
+    # TODO: add option to visualize additional neuron skeletons
     if paletts: assert len(paletts) == len(syn_classes), "Error: must specify a palett for each synapse class"
     p = figure()
     p.y_range.flipped = True
@@ -149,7 +150,7 @@ def skeleton_synapse_visualization(target_neuron: int, syn_classes, skeleton_col
     return top_conns
 
 
-def fetch_connectivity(target_scale, conn_scale, conn_type, target_id, conn_id=None, rois=None):
+def fetch_connectivity(target_scale, conn_scale, conn_type, target_id, conn_id=None, rois=None, include_nonprimary=False):
     """ Fetch a connectivity matrix between specified neurons/subtypes/types avoiding over/under counting of synapses 
         * target_scale (str): indicates scale to analyze neuron(s) of interest on
             - 'neuron': normalize conections to/from a specific neuron 
@@ -176,6 +177,8 @@ def fetch_connectivity(target_scale, conn_scale, conn_type, target_id, conn_id=N
             - NOTE: nust exactly match neuron's identifier in the neuprint database including capatilization
         * rois (list of str): list of string identifiers for all ROIs from which to analyze connections from
             - Leave as None if interested in all connections bettween the specified neurons, regardless of location 
+        * include_nonprimary (bool): flag indicating weather or not to include synapses from non-primary ROIs
+            - NOTE: this should be set to 'True' if you are interested in synapses within a single glomeruli for example
     """
     assert target_scale in ['neuron', 'instance', 'type'], "Error: must specify target scale of 'neuron', 'instance', or 'type'"
     assert conn_scale in ['neuron', 'instance', 'type', 'all'], "Error: must specify connection scale of 'neuron', 'instance', 'type', or 'all'"
@@ -206,16 +209,17 @@ def fetch_connectivity(target_scale, conn_scale, conn_type, target_id, conn_id=N
     else:
         pre_nc = target_nc
         post_nc = conn_nc
-    neurons, conns = neuprint.fetch_adjacencies(pre_nc, post_nc, rois=rois, min_roi_weight=1, include_nonprimary=False)
+    neurons, conns = neuprint.fetch_adjacencies(pre_nc, post_nc, rois=rois, min_roi_weight=1, include_nonprimary=include_nonprimary)
     conns = neuprint.merge_neuron_properties(neurons, conns, ['type', 'instance'])
     conns.sort_values('weight', ascending=False, inplace=True)
-    # manually remove any 'NotPrimary' synapses (even with include_nonprimary=False some are included!)
-    conns = conns[conns['roi']!='NotPrimary']
+    if not include_nonprimary:
+        # manually remove any 'NotPrimary' synapses (even with include_nonprimary=False some are included!)
+        conns = conns[conns['roi']!='NotPrimary']
     conns = conns[['bodyId_pre', 'instance_pre', 'type_pre', 'bodyId_post', 'instance_post', 'type_post', 'roi', 'weight']]
     return conns
 
 
-def fetch_connectivity_multi(target_scale, target_id, conn_type, conn_specs, rois=None):
+def fetch_connectivity_multi(target_scale, target_id, conn_type, conn_specs, rois=None, include_nonprimary=False):
     """ Fetch a connectivity matrix between a given target neuron and multiple classes of pre/post synaptic neurons/subtypes/types avoiding over/under counting of synapses
         * NOTE: all connections must be either pre or post syanptic with respect to the specified target neuron (no mixing)
         * target_scale (str): indicates scale to analyze neuron(s) of interest on
@@ -244,10 +248,12 @@ def fetch_connectivity_multi(target_scale, target_id, conn_type, conn_specs, roi
                 - NOTE: nust exactly match neuron's identifier in the neuprint database including capatilization
         * rois (list of str): list of string identifiers for all ROIs from which to analyze connections from
             - Leave as None if interested in all connections bettween the specified neurons, regardless of location 
+        * include_nonprimary (bool): flag indicating weather or not to include synapses from non-primary ROIs
+            - NOTE: this should be set to 'True' if you are interested in synapses within a single glomeruli for example
     """
     conns = []
     for conn_class in conn_specs:
-        c = fetch_connectivity(target_scale=target_scale, conn_scale=conn_class[0], conn_type=conn_type, target_id=target_id, conn_id=conn_class[1], rois=rois)
+        c = fetch_connectivity(target_scale=target_scale, conn_scale=conn_class[0], conn_type=conn_type, target_id=target_id, conn_id=conn_class[1], rois=rois, include_nonprimary=include_nonprimary)
         conns.append(c)
     conns = pd.concat(conns)
     conns.sort_values('weight', ascending=False, inplace=True)
@@ -368,6 +374,11 @@ def normalize_connectivity(target_scale, conn_scale, conn_type, target_id, conn_
             conns = pd.DataFrame(cell_data)
             conns.sort_values(conn_scale+'_cell_cnt_'+conn_type, ascending=False, inplace=True)
     return conns
+
+
+def normalize_connectivity_multi():
+    # TODO: implement
+    pass
 
 
 def visualize_conn(conn_df, pre_scale, post_scale, sort_by='type', weight_col='weight', height=500, width=700, x_ax_rot=60):
