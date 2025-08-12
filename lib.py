@@ -91,7 +91,7 @@ class syn_specs:
         conn_df = self.fetch_syn_conns()
         if type(conn_df) != pd.core.frame.DataFrame:
             print("No synapses match specifications, can't create points")
-            exit(0)
+            return None, None
         if self.top: 
             top_conns = conn_df[self.lable_res+'_'+self.conn_type].value_counts().head(self.top)
         else:
