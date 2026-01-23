@@ -405,3 +405,59 @@ def visualize_conn(conn_df, pre_scale, post_scale, sort_by='type', weight_col='w
     conn_mx.columns = conn_mx.columns.astype(str)
     return conn_mx.hvplot.heatmap(height=height, width=width, xaxis='top').opts(xrotation=x_ax_rot)
 
+
+def circ_sym_d_v(a):
+    n = a.shape[0]
+    na = np.zeros([n,n], dtype=int)
+    na[:,0] = a[:,0].copy()
+    for i in range(1,n):
+        na[:,i][:n-i] = a[:,i][i:].copy()
+        na[:,i][n-i:] = a[:,i][:i].copy()
+    avv = na.sum(axis=1) / n
+    ca = np.zeros([n,n])
+    ca[:,0] = avv
+    for i in range(1,n):
+        ca[:,i][:i] = avv[n-i:]
+        ca[:,i][i:] = avv[:n-i]
+    return ca
+
+
+def circ_sym_ad_v(a):
+    n = a.shape[0]
+    na = np.zeros([n,n], dtype=int)
+    na[:,0] = a[:,0].copy()
+    for i in range(1,n):
+        na[:,i][:i] = a[:,i][n-i:].copy()
+        na[:,i][i:] = a[:,i][:n-i].copy()
+    avv = na.sum(axis=1) / n
+    ca = np.zeros([n,n])
+    ca[:,0] = avv
+    for i in range(1,n):
+        ca[:,i][:n-i] = avv[i:]
+        ca[:,i][n-i:] = avv[:i]
+    return ca
+
+
+def circ_sym(conn_mx, sym_mode='x'):
+    """ Matrix circular symetrization function
+        * sym_mode (char): choices - x, \\, /, 
+    """
+    conn_mx = np.array(conn_mx)
+    assert conn_mx.shape[0] == conn_mx.shape[1], "Error: connectivity matrix must be square"
+    n = conn_mx.shape[0]
+    cs_mx = np.zeros([n,n])
+    if sym_mode == 'x':
+        assert n%2 == 0, "Error: connectivity matrix with 'x' symetry must have even dimensions"
+        sn = n//2
+        cs_mx[:sn,:sn] = circ_sym_d_v(conn_mx[:sn,:sn])
+        cs_mx[sn:,:sn] = circ_sym_ad_v(conn_mx[sn:,:sn])
+        cs_mx[:sn,sn:] = circ_sym_ad_v(conn_mx[:sn,sn:])
+        cs_mx[sn:,sn:] = circ_sym_d_v(conn_mx[sn:,sn:])
+    elif sym_mode == '\\':
+        cs_mx = circ_sym_d_v(conn_mx)
+    elif sym_mode == '/':
+        cs_mx = circ_sym_ad_v(conn_mx)
+    else:
+        print("Error: Not a valid symetry mode. Valid modes are 'x', '\\', '/'")
+        exit(1)
+    return cs_mx
