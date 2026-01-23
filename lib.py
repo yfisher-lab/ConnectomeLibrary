@@ -406,7 +406,8 @@ def visualize_conn(conn_df, pre_scale, post_scale, sort_by='type', weight_col='w
     return conn_mx.hvplot.heatmap(height=height, width=width, xaxis='top').opts(xrotation=x_ax_rot)
 
 
-def circ_sym_d_v(a):
+def circ_sym_ad_v(a):
+    assert a.shape[0] == a.shape[1], "Error: connectivity matrix must be square"
     n = a.shape[0]
     na = np.zeros([n,n], dtype=int)
     na[:,0] = a[:,0].copy()
@@ -422,7 +423,8 @@ def circ_sym_d_v(a):
     return ca
 
 
-def circ_sym_ad_v(a):
+def circ_sym_d_v(a):
+    assert a.shape[0] == a.shape[1], "Error: connectivity matrix must be square"
     n = a.shape[0]
     na = np.zeros([n,n], dtype=int)
     na[:,0] = a[:,0].copy()
@@ -438,26 +440,46 @@ def circ_sym_ad_v(a):
     return ca
 
 
-def circ_sym(conn_mx, sym_mode='x'):
+def circ_sym(conn_mx, sym_mode='x', og_weight_col='weight'):
     """ Matrix circular symetrization function
-        * sym_mode (char): choices - x, \\, /, 
+        * conn_mx (pandas DataFrame matrix)
+        * sym_mode (char): choices - x, \\, /, >, <, ^, \/ 
     """
+    pre_lbls = {i:l for i,l in enumerate(conn_mx.index)}
+    post_lbls = {i:l for i,l in enumerate(conn_mx.columns)}
     conn_mx = np.array(conn_mx)
-    assert conn_mx.shape[0] == conn_mx.shape[1], "Error: connectivity matrix must be square"
-    n = conn_mx.shape[0]
-    cs_mx = np.zeros([n,n])
+    cs_mx = np.zeros(conn_mx.shape)
     if sym_mode == 'x':
-        assert n%2 == 0, "Error: connectivity matrix with 'x' symetry must have even dimensions"
-        sn = n//2
-        cs_mx[:sn,:sn] = circ_sym_d_v(conn_mx[:sn,:sn])
-        cs_mx[sn:,:sn] = circ_sym_ad_v(conn_mx[sn:,:sn])
-        cs_mx[:sn,sn:] = circ_sym_ad_v(conn_mx[:sn,sn:])
-        cs_mx[sn:,sn:] = circ_sym_d_v(conn_mx[sn:,sn:])
+        assert conn_mx.shape[0] == conn_mx.shape[1], "Error: connectivity matrix must be square"
+        assert conn_mx.shape[0]%2 == 0, "Error: connectivity matrix with 'x' symetry must have even dimensions"
+        sn = conn_mx.shape[0] // 2
+        cs_mx[:sn,:sn] = circ_sym_ad_v(conn_mx[:sn,:sn])
+        cs_mx[sn:,:sn] = circ_sym_d_v(conn_mx[sn:,:sn])
+        cs_mx[:sn,sn:] = circ_sym_d_v(conn_mx[:sn,sn:])
+        cs_mx[sn:,sn:] = circ_sym_ad_v(conn_mx[sn:,sn:])
     elif sym_mode == '\\':
         cs_mx = circ_sym_d_v(conn_mx)
     elif sym_mode == '/':
         cs_mx = circ_sym_ad_v(conn_mx)
+    elif sym_mode == '>':
+        sn = conn_mx.shape[0] // 2
+        cs_mx[:sn,:] = circ_sym_ad_v(conn_mx[:sn,:])
+        cs_mx[sn:,:] = circ_sym_d_v(conn_mx[sn:,:])
+    elif sym_mode == '<':
+        sn = conn_mx.shape[0] // 2
+        cs_mx[:sn,:] = circ_sym_d_v(conn_mx[:sn,:])
+        cs_mx[sn:,:] = circ_sym_ad_v(conn_mx[sn:,:])
+    elif sym_mode == '^':
+        sn = conn_mx.shape[1] // 2
+        cs_mx[:,:sn] = circ_sym_ad_v(conn_mx[:,:sn])
+        cs_mx[:,sn:] = circ_sym_d_v(conn_mx[:,sn:])
+    elif sym_mode == '\/':
+        sn = conn_mx.shape[1] // 2
+        cs_mx[:,:sn] = circ_sym_d_v(conn_mx[:,:sn])
+        cs_mx[:,sn:] = circ_sym_ad_v(conn_mx[:,sn:])
     else:
         print("Error: Not a valid symetry mode. Valid modes are 'x', '\\', '/'")
         exit(1)
-    return cs_mx
+    cs_l = [{'instance_pre':prl, 'instance_post':psl, og_weight_col:conn_mx[i][j], 'cs_weight':cs_mx[i][j]} for i,prl in pre_lbls.items() for j,psl in post_lbls.items()]
+    cs_df = pd.DataFrame(cs_l)
+    return cs_df
