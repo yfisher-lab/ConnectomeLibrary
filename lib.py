@@ -153,23 +153,23 @@ def skeleton_synapse_visualization(target_neuron: int, syn_classes, skeleton_col
 def fetch_connectivity(target_scale, conn_scale, conn_type, target_id, conn_id=None, rois=None, include_nonprimary=False):
     """ Fetch a connectivity matrix between specified neurons/subtypes/types avoiding over/under counting of synapses 
         * target_scale (str): indicates scale to analyze neuron(s) of interest on
-            - 'neuron': normalize conections to/from a specific neuron 
+            - 'neuron': fetch conections to/from a specific neuron 
                 - NOTE: must specify neuprint neuron integer bodyId as 'target_id' argument
-            - 'instance': normalize connections over an entire instance (subtype) of neurons (ie 'PEN_b(PB06b)_L4')
+            - 'instance': fetch connections over an entire instance (subtype) of neurons (ie 'PEN_b(PB06b)_L4')
                 - NOTE: must specify neuprint neuron instance (subtype) name as 'target_id' argument 
-            - 'type': normalize connections over an entire type of neurons (ie 'PEN_b(PEN2)')
+            - 'type': fetch connections over an entire type of neurons (ie 'PEN_b(PEN2)')
                 - NOTE: must specify neuprint neuron type name as 'target_id' argument 
         * conn_scale (str): indicates scale over which to analyze connections to/from target neuron(s)
-            - 'neuron': normalize connections to/from a sprcific neuron
+            - 'neuron': fetch connections to/from a sprcific neuron
                 - NOTE: must specify neuprint neuron integer bodyId as 'conn_id' argument
             - 'instance': nomalize connections to/from an entire instance (subtype) of neurons (ie 'PEN_b(PB06b)_L4')
                 - NOTE: must specify neuprint neuron instance (subtype) name as 'conn_id' argument
-            - 'type': normalize connections to/from an entire type of neurons (ie 'PEN_b(PEN2)')
+            - 'type': fetch connections to/from an entire type of neurons (ie 'PEN_b(PEN2)')
                 - NOTE: must specify neuprint neuron type name as 'conn_id' argument
-            - 'all': normalize connections to/from all pre/post synaptic neurons
+            - 'all': fetch connections to/from all pre/post synaptic neurons
         * conn_type (str): indicates weather to analyze inputs or outputs to/from a given neuron/instance/type
-            - 'pre': normalize presynaptic connections (analyze relative contributions of inputs) 
-            - 'post': normalize postsynaptic connections (analyze relative output strengths)
+            - 'pre': fetch presynaptic connections (analyze relative contributions of inputs) 
+            - 'post': fetch postsynaptic connections (analyze relative output strengths)
         * target_id (int or str): neuprint identifier for target neuron(s) ID/instance/type
             - NOTE: nust exactly match neuron's identifier in the neuprint database including capatilization
         * conn_id (int, str, or None): neuprint identifier for connecting neuron(s) ID/instance/type
